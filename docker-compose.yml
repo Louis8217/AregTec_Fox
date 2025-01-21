@@ -1,0 +1,64 @@
+version: "3"
+services:
+  AregTec__mysql:
+    image: mysql:latest
+    ports:
+      - 3306:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=AregTec
+      - MYSQL_DATABASE=AregTec_Drupal
+    volumes:
+      - C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec10\path\mysql\:/var/lib/mysql/
+
+  AregTec__phpmyadmin:
+    image: phpmyadmin:latest
+    ports:
+      - 8081:80
+    links:
+      - AregTec__mysql:db
+
+  #AregTec__Drupal:
+   # image: drupal:latest
+    #ports:
+     # - 8090:80
+    #environment:
+     # - MYSQL_USER=root 
+      #- MYSQL_PASSWORD=AregTec
+    #links:
+     # - AregTec__mysql:database
+    #volumes:
+     # - C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec\path\drupal\modules:/opt/drupal/web/modules
+      #- C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec\path\drupal\themes:/opt/drupal/web/themes
+
+  AregTec__Drupal10:
+    image: drupal:10-apache
+    ports:
+      - 8090:80
+    environment:
+      - MYSQL_USER=root 
+      - MYSQL_PASSWORD=AregTec
+    links:
+      - AregTec__mysql:database
+    volumes:
+      - C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec10\path\drupal_10\modules:/opt/drupal/web/modules
+      - C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec10\path\drupal_10\themes:/opt/drupal/web/themes
+
+  #AregTec__Nono:
+    #image: lerilamour/rasa_nono
+    #ports: 
+    #  - 8080:5005
+    #command: ["run", "-m", "models", "--enable-api", "--cors", "*", "--debug"]
+
+ # AregTec__Action:
+   # image: rasa/rasa-sdk:latest
+  #  ports:
+  #    - 5005:5005
+ #   volumes:
+   # - C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec10\path\drupal_10\app\action:\app\action
+
+
+#  AregTec_Python:
+  #  image: guillaumemerviel/aregtec_python
+ #   ports:
+ #     - 8000:8000
+
