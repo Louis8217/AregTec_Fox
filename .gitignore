@@ -1,3 +1,5 @@
 mysql.sock
 binlog.000003
 binlog.000004 
+"Path/mysql/binlog.*" 
+"Path/mysql/binlog.*" 
