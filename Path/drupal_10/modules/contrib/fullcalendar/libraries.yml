@@ -1,0 +1,10 @@
+
+fullcalendar:
+  version: 6.1.15
+  css:
+    theme:
+      https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.15/index.min.css: { type: external }
+  js:
+    https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.15/index.min.js: { type: external }
+  dependencies:
+    - core/jquery
