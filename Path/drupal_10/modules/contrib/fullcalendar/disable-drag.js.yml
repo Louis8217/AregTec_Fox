@@ -1,0 +1,10 @@
+document.addEventListener("DOMContentLoaded", function () {
+  var calendarEl = document.getElementById("fullcalendar");
+  if (calendarEl) {
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+      editable: false, // Désactive le drag & drop
+    });
+    calendar.render();
+  }
+});
+
