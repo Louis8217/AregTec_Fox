@@ -1,11 +1,12 @@
 <?php
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\bookable_calendar\Entity\BookingContact;
 
 /**
  * Hook d'initialisation pour vérifier si le module est bien chargé.
  */
 function bookable_custom_init() {
-  \Drupal::logger('bookable_custom')->debug('🚀 bookable_custom.module chargé avec succès');
+    \Drupal::logger('bookable_custom')->debug('🚀 bookable_custom.module chargé avec succès');
 }
 bookable_custom_init();
 
@@ -13,26 +14,32 @@ bookable_custom_init();
  * Modifie le formulaire de réservation pour forcer 2 créneaux pour un cheval.
  */
 function bookable_custom_form_alter(&$form, FormStateInterface $form_state, $form_id) {
-  \Drupal::logger('bookable_custom')->debug('📝 hook_form_alter exécuté pour : @form_id', [
-    '@form_id' => $form_id,
-  ]);
+    \Drupal::logger('bookable_custom')->debug('📝 hook_form_alter exécuté pour : @form_id', [
+        '@form_id' => $form_id,
+    ]);
 
-  if ($form_id == 'booking_contact_add_form' || $form_id == 'bookable_calendar_booking_form') {
-    \Drupal::logger('bookable_custom')->info('✅ Modification du formulaire de réservation appliquée.');
-    $form['#validate'][] = 'bookable_custom_validate_booking';
-  }
+    if ($form_id == 'booking_contact_add_form' || $form_id == 'bookable_calendar_booking_form') {
+        \Drupal::logger('bookable_custom')->info('✅ Modification du formulaire de réservation appliquée.');
+        $form['#validate'][] = 'bookable_custom_validate_booking';
+    }
 }
 
 /**
- * Valide la réservation en fonction du type d'animal et réserve le second créneau.
+ * Valide la réservation en fonction du type d'animal et réserve le second créneau si nécessaire.
  */
 function bookable_custom_validate_booking($form, FormStateInterface &$form_state) {
     \Drupal::logger('bookable_custom')->debug('🚀 Validation de réservation exécutée.');
 
-    $type_animal = $form_state->getValue('field_animal')[0]['value'] ?? null;
+    $type_animal = strtolower($form_state->getValue('field_animal')[0]['value'] ?? '');
     \Drupal::logger('bookable_custom')->debug('📢 Type d\'animal reçu : @animal', [
         '@animal' => $type_animal,
     ]);
+
+    // 🚨 Vérification : Seul "cheval" doit réserver un second créneau
+    if ($type_animal !== 'cheval') {
+        \Drupal::logger('bookable_custom')->info('✅ Réservation classique - Aucun second créneau nécessaire.');
+        return;
+    }
 
     $date_value = $form_state->getValue('date__value');
 
@@ -73,11 +80,8 @@ function bookable_custom_validate_booking($form, FormStateInterface &$form_state
 
     \Drupal::logger('bookable_custom')->info('✅ Créneau suivant libre, réservation en cours.');
 
-    // Réserver le second créneau immédiatement
+    // Réserver le second créneau via l'Entity API de Drupal
     bookable_custom_reserve_slot($next_instance_id, $form_state->getValues());
-
-    // Mettre à jour la disponibilité immédiatement
-    bookable_custom_update_slot_availability($next_instance_id);
 }
 
 /**
@@ -116,36 +120,47 @@ function bookable_custom_check_availability($next_instance_id) {
 }
 
 /**
- * Réserve automatiquement un créneau supplémentaire.
+ * Réserve automatiquement un créneau supplémentaire via l'Entity API.
  */
 function bookable_custom_reserve_slot($next_instance_id, $values) {
-    \Drupal::logger('bookable_custom')->info('📝 Tentative de réservation automatique du second créneau ID: @id.', [
+    \Drupal::logger('bookable_custom')->info('📝 Tentative de réservation via Bookable Calendar - Créneau ID: @id', [
         '@id' => $next_instance_id,
     ]);
 
-    $contact_id = $values['user_id'] ?? 0;
+    // ✅ Récupérer correctement l'UID de l'utilisateur.
+    $contact_id = $values['uid'][0]['target_id'] ?? $values['uid'] ?? null;
 
-    if ($contact_id === 0) {
-        \Drupal::logger('bookable_custom')->error('❌ Impossible de récupérer l\'ID utilisateur, annulation de la réservation.');
+    if (!$contact_id || !is_numeric($contact_id) || $contact_id <= 0) {
+        \Drupal::logger('bookable_custom')->error('❌ UID invalide (@uid). Annulation de la réservation.', [
+            '@uid' => print_r($values['uid'], true),
+        ]);
         return;
     }
 
-    $uuid_service = \Drupal::service('uuid');
-    $uuid = $uuid_service->generate();
-
-    \Drupal::database()->insert('booking_contact')
-        ->fields([
-            'uuid' => $uuid,
+    // ✅ Créer une nouvelle réservation via l'Entity API de Drupal.
+    try {
+        $booking = BookingContact::create([
             'booking_instance' => $next_instance_id,
-            'uid' => $contact_id,
+            'uid' => (int) $contact_id,
             'party_size' => 1,
-        ])
-        ->execute();
+            'email' => $values['email'][0]['value'] ?? '',
+        ]);
 
-    \Drupal::logger('bookable_custom')->info('✅ Second créneau réservé automatiquement - ID: @id pour user_id: @user.', [
-        '@id' => $next_instance_id,
-        '@user' => $contact_id,
-    ]);
+        $booking->save();
+
+        \Drupal::logger('bookable_custom')->info('✅ Réservation validée via Bookable Calendar - ID: @id pour user_id: @user.', [
+            '@id' => $next_instance_id,
+            '@user' => $contact_id,
+        ]);
+
+        // Mettre à jour la disponibilité.
+        bookable_custom_update_slot_availability($next_instance_id);
+
+    } catch (\Exception $e) {
+        \Drupal::logger('bookable_custom')->error('❌ Échec de la réservation via Bookable Calendar - Erreur: @error', [
+            '@error' => $e->getMessage(),
+        ]);
+    }
 }
 
 /**
