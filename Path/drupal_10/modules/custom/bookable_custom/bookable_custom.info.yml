@@ -1,0 +1,7 @@
+name: 'Bookable Custom'
+type: module
+description: 'Ajoute une logique personnalisée pour la réservation des animaux dans Bookable Calendar.'
+package: Custom
+core_version_requirement: ^9 || ^10
+dependencies:
+  - drupal:bookable_calendar

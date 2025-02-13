@@ -7,8 +7,9 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD=AregTec
       - MYSQL_DATABASE=AregTec_Drupal
+      - innodb_force_recovery=1
     volumes:
-      - C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec10\path\mysql\:/var/lib/mysql/
+      - C:\Users\duthe\Documents\4-DEV\AregTec_Fox\path\mysql\:/var/lib/mysql/
 
   AregTec__phpmyadmin:
     image: phpmyadmin:latest
@@ -27,8 +28,8 @@ services:
     #links:
      # - AregTec__mysql:database
     #volumes:
-     # - C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec\path\drupal\modules:/opt/drupal/web/modules
-      #- C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec\path\drupal\themes:/opt/drupal/web/themes
+     # - C:\Users\duthe\Documents\4-DEV\AregTec_Fox\path\drupal\modules:/opt/drupal/web/modules
+      #- C:\Users\duthe\Documents\4-DEV\AregTec_Fox\path\drupal\themes:/opt/drupal/web/themes
 
   AregTec__Drupal10:
     image: drupal:10-apache
@@ -40,8 +41,8 @@ services:
     links:
       - AregTec__mysql:database
     volumes:
-      - C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec10\path\drupal_10\modules:/opt/drupal/web/modules
-      - C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec10\path\drupal_10\themes:/opt/drupal/web/themes
+      - C:\Users\duthe\Documents\4-DEV\AregTec_Fox\path\drupal_10\modules:/opt/drupal/web/modules
+      - C:\Users\duthe\Documents\4-DEV\AregTec_Fox\path\drupal_10\themes:/opt/drupal/web/themes
 
   #AregTec__Nono:
     #image: lerilamour/rasa_nono
@@ -54,7 +55,7 @@ services:
   #  ports:
   #    - 5005:5005
  #   volumes:
-   # - C:\Users\louis\OneDrive\Documents\4-DEV\Site_AregTec10\path\drupal_10\app\action:\app\action
+   # - C:\Users\duthe\Documents\4-DEV\AregTec_Fox\path\drupal_10\app\action:\app\action
 
 
 #  AregTec_Python:

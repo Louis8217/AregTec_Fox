@@ -1,0 +1,175 @@
+<?php
+use Drupal\Core\Form\FormStateInterface;
+
+/**
+ * Hook d'initialisation pour vérifier si le module est bien chargé.
+ */
+function bookable_custom_init() {
+  \Drupal::logger('bookable_custom')->debug('🚀 bookable_custom.module chargé avec succès');
+}
+bookable_custom_init();
+
+/**
+ * Modifie le formulaire de réservation pour forcer 2 créneaux pour un cheval.
+ */
+function bookable_custom_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  \Drupal::logger('bookable_custom')->debug('📝 hook_form_alter exécuté pour : @form_id', [
+    '@form_id' => $form_id,
+  ]);
+
+  if ($form_id == 'booking_contact_add_form' || $form_id == 'bookable_calendar_booking_form') {
+    \Drupal::logger('bookable_custom')->info('✅ Modification du formulaire de réservation appliquée.');
+    $form['#validate'][] = 'bookable_custom_validate_booking';
+  }
+}
+
+/**
+ * Valide la réservation en fonction du type d'animal et réserve le second créneau.
+ */
+function bookable_custom_validate_booking($form, FormStateInterface &$form_state) {
+    \Drupal::logger('bookable_custom')->debug('🚀 Validation de réservation exécutée.');
+
+    $type_animal = $form_state->getValue('field_animal')[0]['value'] ?? null;
+    \Drupal::logger('bookable_custom')->debug('📢 Type d\'animal reçu : @animal', [
+        '@animal' => $type_animal,
+    ]);
+
+    $date_value = $form_state->getValue('date__value');
+
+    if (!$date_value) {
+        \Drupal::logger('bookable_custom')->warning('⚠️ `date__value` est null. Tentative de récupération alternative via booking_instance.');
+
+        $booking_instance_id = $form_state->getValue(['booking_instance', 0, 'target_id']);
+        if ($booking_instance_id) {
+            $date_value = \Drupal::database()->select('bookable_calendar_opening_inst', 'bco')
+                ->fields('bco', ['date__value'])
+                ->condition('bco.id', $booking_instance_id)
+                ->execute()
+                ->fetchField();
+        }
+    }
+
+    if (!$date_value) {
+        \Drupal::logger('bookable_custom')->error('❌ Impossible de récupérer `date__value`. Annulation.');
+        $form_state->setErrorByName('date__value', t("Erreur : Impossible de récupérer la date de début."));
+        return;
+    }
+
+    $date_value = is_numeric($date_value) ? (int) $date_value : strtotime($date_value);
+    $next_slot = $date_value + 3600;
+
+    \Drupal::logger('bookable_custom')->debug('🐎 Créneau validé - Début: @start | Suivant: @next', [
+        '@start' => date('H:i', $date_value),
+        '@next' => date('H:i', $next_slot),
+    ]);
+
+    $next_instance_id = bookable_custom_find_next_slot($next_slot);
+
+    if (!$next_instance_id || !bookable_custom_check_availability($next_instance_id)) {
+        \Drupal::logger('bookable_custom')->warning('🚫 Créneau suivant non disponible - Réservation refusée.');
+        $form_state->setErrorByName('date__value', t("Le créneau suivant est déjà réservé ou indisponible."));
+        return;
+    }
+
+    \Drupal::logger('bookable_custom')->info('✅ Créneau suivant libre, réservation en cours.');
+
+    // Réserver le second créneau immédiatement
+    bookable_custom_reserve_slot($next_instance_id, $form_state->getValues());
+
+    // Mettre à jour la disponibilité immédiatement
+    bookable_custom_update_slot_availability($next_instance_id);
+}
+
+/**
+ * Trouve l'ID du créneau suivant basé sur le timestamp.
+ */
+function bookable_custom_find_next_slot($timestamp) {
+    $next_instance_id = \Drupal::database()->select('bookable_calendar_opening_inst', 'bco')
+        ->fields('bco', ['id'])
+        ->condition('bco.date__value', $timestamp, '=')
+        ->execute()
+        ->fetchField();
+
+    \Drupal::logger('bookable_custom')->debug('📌 Créneau suivant ID: @id trouvé pour @time', [
+        '@id' => $next_instance_id,
+        '@time' => date('H:i', $timestamp),
+    ]);
+
+    return $next_instance_id;
+}
+
+/**
+ * Vérifie si un créneau est disponible.
+ */
+function bookable_custom_check_availability($next_instance_id) {
+    \Drupal::logger('bookable_custom')->debug('🔍 Vérification de la disponibilité pour ID: @id', [
+        '@id' => $next_instance_id,
+    ]);
+
+    $reserved = \Drupal::database()->select('booking_contact', 'bc')
+        ->fields('bc', ['id'])
+        ->condition('bc.booking_instance', $next_instance_id)
+        ->execute()
+        ->fetchField();
+
+    return !$reserved;
+}
+
+/**
+ * Réserve automatiquement un créneau supplémentaire.
+ */
+function bookable_custom_reserve_slot($next_instance_id, $values) {
+    \Drupal::logger('bookable_custom')->info('📝 Tentative de réservation automatique du second créneau ID: @id.', [
+        '@id' => $next_instance_id,
+    ]);
+
+    $contact_id = $values['user_id'] ?? 0;
+
+    if ($contact_id === 0) {
+        \Drupal::logger('bookable_custom')->error('❌ Impossible de récupérer l\'ID utilisateur, annulation de la réservation.');
+        return;
+    }
+
+    $uuid_service = \Drupal::service('uuid');
+    $uuid = $uuid_service->generate();
+
+    \Drupal::database()->insert('booking_contact')
+        ->fields([
+            'uuid' => $uuid,
+            'booking_instance' => $next_instance_id,
+            'uid' => $contact_id,
+            'party_size' => 1,
+        ])
+        ->execute();
+
+    \Drupal::logger('bookable_custom')->info('✅ Second créneau réservé automatiquement - ID: @id pour user_id: @user.', [
+        '@id' => $next_instance_id,
+        '@user' => $contact_id,
+    ]);
+}
+
+/**
+ * Met à jour la disponibilité du slot après réservation.
+ */
+function bookable_custom_update_slot_availability($instance_id) {
+    \Drupal::logger('bookable_custom')->info('🔄 Mise à jour de la disponibilité du créneau ID: @id', [
+        '@id' => $instance_id,
+    ]);
+
+    $slots = \Drupal::database()->select('bookable_calendar_opening_inst', 'bco')
+        ->fields('bco', ['slots'])
+        ->condition('bco.id', $instance_id)
+        ->execute()
+        ->fetchField();
+
+    if ($slots > 0) {
+        \Drupal::database()->update('bookable_calendar_opening_inst')
+            ->fields(['slots' => $slots - 1])
+            ->condition('id', $instance_id)
+            ->execute();
+
+        \Drupal::logger('bookable_custom')->info('✅ Créneau mis à jour - Slots restants: @slots', [
+            '@slots' => $slots - 1,
+        ]);
+    }
+}

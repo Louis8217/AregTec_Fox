@@ -1,0 +1,7 @@
+bookable_custom:
+  version: 1.x
+  js:
+    js/bookable_custom.js: {}
+  dependencies:
+    - core/drupal
+    - bookable_calendar/bookable_calendar
